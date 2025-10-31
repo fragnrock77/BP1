@@ -22,8 +22,11 @@ const exportCsvButton = document.getElementById('exportCsvButton');
 const exportXlsxButton = document.getElementById('exportXlsxButton');
 
 const worker = new Worker('searchWorker.js', { type: 'module' });
+ codex/develop-web-app-for-large-file-import-and-search-d22rf4
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
+
+ main
 
 let dataset = [];
 let headers = [];
@@ -187,11 +190,16 @@ exportCsvButton.addEventListener('click', () => {
     triggerDownload(url, deriveFileName('csv'));
 });
 
+ codex/develop-web-app-for-large-file-import-and-search-d22rf4
 exportXlsxButton.addEventListener('click', async () => {
+
+exportXlsxButton.addEventListener('click', () => {
+ main
     const exportRows = getFilteredRows();
     if (!exportRows.length) {
         return;
     }
+ codex/develop-web-app-for-large-file-import-and-search-d22rf4
     try {
         const blob = await buildXlsxBlob(headers, exportRows, deriveSheetName());
         const url = URL.createObjectURL(blob);
@@ -199,6 +207,15 @@ exportXlsxButton.addEventListener('click', async () => {
     } catch (error) {
         showError(`Export XLSX impossible : ${error.message}`);
     }
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...exportRows]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Résultats');
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    triggerDownload(url, deriveFileName('xlsx'));
+ main
 });
 
 function triggerDownload(url, filename) {
@@ -216,11 +233,14 @@ function deriveFileName(extension) {
     return `${base}-filtre.${extension}`;
 }
 
+ codex/develop-web-app-for-large-file-import-and-search-d22rf4
 function deriveSheetName() {
     const base = activeFileName ? activeFileName.replace(/\.[^.]+$/, '') : 'Résultats';
     return sanitizeSheetName(base);
 }
 
+
+ main
 function displayMessage(message) {
     resultsSummary.textContent = `${message}${lastSearchDuration ? ` · Recherche ${lastSearchDuration.toFixed(1)} ms` : ''}`;
     resultsSummary.hidden = false;
@@ -316,6 +336,7 @@ function parseCsv(file) {
 }
 
 async function parseXlsx(file) {
+ codex/develop-web-app-for-large-file-import-and-search-d22rf4
     updateProgress(0, 'Lecture XLSX…');
     const buffer = await file.arrayBuffer();
     const zipNavigator = createZipNavigator(buffer);
@@ -336,6 +357,51 @@ async function parseXlsx(file) {
     if (!headers.length && !rows.length) {
         throw new Error('La feuille est vide.');
     }
+
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    if (!worksheet) {
+        throw new Error('Le classeur ne contient aucune feuille lisible.');
+    }
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+    const headerRowIndex = range.s.r;
+    const headers = [];
+    for (let C = range.s.c; C <= range.e.c; C += 1) {
+        const cellAddress = XLSX.utils.encode_cell({ r: headerRowIndex, c: C });
+        const cell = worksheet[cellAddress];
+        const headerLabel = cell ? sanitizeValue(cell.v) : `Colonne ${C - range.s.c + 1}`;
+        headers.push(headerLabel);
+    }
+
+    const rows = [];
+    const totalRows = range.e.r - headerRowIndex;
+    const chunkSize = 400;
+
+    for (let startRow = headerRowIndex + 1; startRow <= range.e.r; startRow += chunkSize) {
+        const endRow = Math.min(startRow + chunkSize - 1, range.e.r);
+        const subsetRange = {
+            s: { r: startRow, c: range.s.c },
+            e: { r: endRow, c: range.e.c }
+        };
+        const slice = XLSX.utils.sheet_to_json(worksheet, {
+            header: headers,
+            range: subsetRange,
+            defval: '',
+            blankrows: false
+        });
+        slice.forEach((record) => {
+            const row = headers.map((header) => sanitizeValue(record[header]));
+            rows.push(row);
+        });
+        const processedRows = rows.length;
+        const percent = totalRows ? (processedRows / totalRows) * 100 : 100;
+        updateProgress(percent, `Lecture XLSX (${rows.length.toLocaleString()} lignes)`);
+        await new Promise((resolve) => setTimeout(resolve));
+    }
+
+ main
     return { headers, rows };
 }
 
@@ -464,6 +530,7 @@ function executeSearch() {
     searchButton.textContent = 'Recherche…';
     worker.postMessage({ type: 'search', query, options });
 }
+ codex/develop-web-app-for-large-file-import-and-search-d22rf4
 
 function createZipNavigator(buffer) {
     const view = new DataView(buffer);
@@ -898,3 +965,5 @@ function computeCrc32(bytes) {
 function delayFrame() {
     return new Promise((resolve) => setTimeout(resolve));
 }
+
+ main
