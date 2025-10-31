@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Explorateur de données CSV/XLSX</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer></script>
+    <script src="app.js" type="module" defer></script>
+</head>
+<body>
+    <header class="app-header">
+        <h1>Analyseur de données CSV &amp; XLSX</h1>
+        <p>Importez des fichiers volumineux, recherchez rapidement vos mots-clés et exportez les lignes pertinentes.</p>
+    </header>
+
+    <main class="app-container">
+        <section class="upload-panel">
+            <div class="drop-zone" id="dropZone">
+                <input type="file" id="fileInput" accept=".csv,.xlsx" />
+                <p><strong>Glissez-déposez</strong> votre fichier ici ou <label for="fileInput" class="link">sélectionnez-le</label>.</p>
+                <p class="hint">Formats pris en charge : CSV, XLSX (jusqu'à 500 Mo).</p>
+            </div>
+            <div class="progress" id="progressWrapper" hidden>
+                <div class="progress-info">
+                    <span id="progressLabel">Analyse du fichier…</span>
+                    <span id="progressValue">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+            <div class="error" id="errorBox" hidden></div>
+        </section>
+
+        <section class="search-panel" aria-live="polite">
+            <div class="search-controls">
+                <label for="searchInput">Recherche multi-mots-clés</label>
+                <div class="search-row">
+                    <input type="text" id="searchInput" placeholder="Ex. : client OR commande, -annulé, ""Paris""" />
+                    <button id="searchButton" class="primary" disabled>Rechercher</button>
+                    <button id="resetButton" class="ghost" disabled>Réinitialiser</button>
+                </div>
+                <div class="search-options">
+                    <label><input type="checkbox" id="caseSensitive" /> Sensible à la casse</label>
+                    <label><input type="checkbox" id="exactMatch" /> Correspondance exacte</label>
+                </div>
+                <p class="search-hint">Utilisez les opérateurs logiques <code>AND</code>, <code>OR</code>, <code>NOT</code> (ou le signe <code>-</code> devant un mot) pour composer votre requête.</p>
+            </div>
+            <div class="results-summary" id="resultsSummary" hidden></div>
+        </section>
+
+        <section class="table-panel" aria-live="polite">
+            <div class="table-toolbar">
+                <div class="pagination-controls">
+                    <label for="pageSize">Lignes par page</label>
+                    <select id="pageSize">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="250">250</option>
+                    </select>
+                    <button id="prevPage" class="ghost" disabled>&larr; Précédent</button>
+                    <span id="pageInfo">Page 0 / 0</span>
+                    <button id="nextPage" class="ghost" disabled>Suivant &rarr;</button>
+                </div>
+                <div class="export-group">
+                    <button id="copyButton" class="ghost" disabled>Copier</button>
+                    <button id="exportCsvButton" class="ghost" disabled>Exporter CSV</button>
+                    <button id="exportXlsxButton" class="ghost" disabled>Exporter XLSX</button>
+                </div>
+            </div>
+            <div class="table-wrapper" id="tableWrapper">
+                <table id="resultsTable">
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <template id="rowTemplate">
+        <tr></tr>
+    </template>
+
+    <footer class="app-footer">
+        <p>Recherche exécutée dans un Web Worker pour préserver la fluidité de l'interface.</p>
+    </footer>
+</body>
+</html>
