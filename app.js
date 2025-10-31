@@ -22,12 +22,18 @@ const exportCsvButton = document.getElementById('exportCsvButton');
 const exportXlsxButton = document.getElementById('exportXlsxButton');
 
 const worker = new Worker('searchWorker.js', { type: 'module' });
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
+const textDecoder = new TextDecoder();
+const textEncoder = new TextEncoder();
+
+
  codex/develop-web-app-for-large-file-import-and-search-d22rf4
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
 
  main
 
+ main
 let dataset = [];
 let headers = [];
 let filteredIndexes = [];
@@ -190,16 +196,23 @@ exportCsvButton.addEventListener('click', () => {
     triggerDownload(url, deriveFileName('csv'));
 });
 
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
+exportXlsxButton.addEventListener('click', async () => {
+
  codex/develop-web-app-for-large-file-import-and-search-d22rf4
 exportXlsxButton.addEventListener('click', async () => {
 
 exportXlsxButton.addEventListener('click', () => {
  main
+ main
     const exportRows = getFilteredRows();
     if (!exportRows.length) {
         return;
     }
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
+
  codex/develop-web-app-for-large-file-import-and-search-d22rf4
+ main
     try {
         const blob = await buildXlsxBlob(headers, exportRows, deriveSheetName());
         const url = URL.createObjectURL(blob);
@@ -207,6 +220,8 @@ exportXlsxButton.addEventListener('click', () => {
     } catch (error) {
         showError(`Export XLSX impossible : ${error.message}`);
     }
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
+
 
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...exportRows]);
     const workbook = XLSX.utils.book_new();
@@ -215,6 +230,7 @@ exportXlsxButton.addEventListener('click', () => {
     const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     triggerDownload(url, deriveFileName('xlsx'));
+ main
  main
 });
 
@@ -233,13 +249,19 @@ function deriveFileName(extension) {
     return `${base}-filtre.${extension}`;
 }
 
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
+
  codex/develop-web-app-for-large-file-import-and-search-d22rf4
+ main
 function deriveSheetName() {
     const base = activeFileName ? activeFileName.replace(/\.[^.]+$/, '') : 'Résultats';
     return sanitizeSheetName(base);
 }
 
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
 
+
+ main
  main
 function displayMessage(message) {
     resultsSummary.textContent = `${message}${lastSearchDuration ? ` · Recherche ${lastSearchDuration.toFixed(1)} ms` : ''}`;
@@ -310,6 +332,75 @@ function parseCsv(file) {
         const rows = [];
         let headers = [];
         let processedBytes = 0;
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
+        let attemptedFallback = false;
+
+        const resetState = () => {
+            rows.length = 0;
+            headers = [];
+            processedBytes = 0;
+        };
+
+        const runParse = (useWorker) => {
+            try {
+                window.Papa.parse(file, {
+                    header: true,
+                    worker: useWorker,
+                    skipEmptyLines: true,
+                    chunkSize: 1024 * 1024 * 2,
+                    chunk: (results) => {
+                        if (!headers.length) {
+                            headers = results.meta.fields || [];
+                        }
+                        const chunkRows = results.data.map((row) => headers.map((header) => sanitizeValue(row[header])));
+                        rows.push(...chunkRows);
+                        processedBytes = results.meta.cursor || processedBytes + chunkRows.length;
+                        const percent = (processedBytes / file.size) * 100;
+                        updateProgress(percent, `Lecture CSV (${rows.length.toLocaleString()} lignes)`);
+                    },
+                    error: (error, _file, _input, reason) => {
+                        if (useWorker && !attemptedFallback && shouldRetryCsvWithoutWorker(error, reason)) {
+                            attemptedFallback = true;
+                            resetState();
+                            updateProgress(0, 'Lecture CSV…');
+                            runParse(false);
+                            return;
+                        }
+                        reject(error instanceof Error ? error : new Error(String(error)));
+                    },
+                    complete: () => {
+                        resolve({ headers, rows });
+                    }
+                });
+            } catch (error) {
+                if (useWorker && !attemptedFallback && shouldRetryCsvWithoutWorker(error)) {
+                    attemptedFallback = true;
+                    resetState();
+                    updateProgress(0, 'Lecture CSV…');
+                    runParse(false);
+                    return;
+                }
+                reject(error instanceof Error ? error : new Error(String(error)));
+            }
+        };
+
+        updateProgress(0, 'Lecture CSV…');
+        runParse(Boolean(window.Papa?.WORKERS_SUPPORTED));
+    });
+}
+
+function shouldRetryCsvWithoutWorker(error, reason) {
+    const message = (error && error.message) || '';
+    const details = [message, reason].join(' ').toLowerCase();
+    if (!details) {
+        return false;
+    }
+    const workerHints = ['worker', 'web worker', 'script error', 'securityerror', 'access is denied'];
+    return workerHints.some((hint) => details.includes(hint));
+}
+
+async function parseXlsx(file) {
+
         window.Papa.parse(file, {
             header: true,
             worker: true,
@@ -337,6 +428,7 @@ function parseCsv(file) {
 
 async function parseXlsx(file) {
  codex/develop-web-app-for-large-file-import-and-search-d22rf4
+ main
     updateProgress(0, 'Lecture XLSX…');
     const buffer = await file.arrayBuffer();
     const zipNavigator = createZipNavigator(buffer);
@@ -357,6 +449,8 @@ async function parseXlsx(file) {
     if (!headers.length && !rows.length) {
         throw new Error('La feuille est vide.');
     }
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
+
 
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
@@ -401,6 +495,7 @@ async function parseXlsx(file) {
         await new Promise((resolve) => setTimeout(resolve));
     }
 
+ main
  main
     return { headers, rows };
 }
@@ -530,7 +625,10 @@ function executeSearch() {
     searchButton.textContent = 'Recherche…';
     worker.postMessage({ type: 'search', query, options });
 }
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
+
  codex/develop-web-app-for-large-file-import-and-search-d22rf4
+main
 
 function createZipNavigator(buffer) {
     const view = new DataView(buffer);
@@ -600,6 +698,33 @@ function createZipNavigator(buffer) {
 }
 
 async function inflateBytes(data) {
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
+    if (typeof DecompressionStream !== 'undefined') {
+        const attempt = async (format) => {
+            const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream(format));
+            const buffer = await new Response(stream).arrayBuffer();
+            return new Uint8Array(buffer);
+        };
+        try {
+            return await attempt('deflate-raw');
+        } catch (error) {
+            try {
+                return await attempt('deflate');
+            } catch (fallbackError) {
+                console.warn('Échec de la décompression native, tentative via bibliothèque.', fallbackError);
+            }
+        }
+    }
+    if (typeof fflate !== 'undefined' && typeof fflate.inflateSync === 'function') {
+        try {
+            return fflate.inflateSync(data, { raw: true });
+        } catch (libraryError) {
+            console.error('Impossible de décompresser les données ZIP via fflate.', libraryError);
+            throw new Error('Décompression DEFLATE impossible (données corrompues).');
+        }
+    }
+    throw new Error('Décompression DEFLATE indisponible sur ce navigateur.');
+
     if (typeof DecompressionStream === 'undefined') {
         throw new Error('Décompression DEFLATE indisponible sur ce navigateur.');
     }
@@ -613,6 +738,7 @@ async function inflateBytes(data) {
     } catch (error) {
         return attempt('deflate');
     }
+ main
 }
 
 function extractFirstSheet(workbookXml) {
@@ -941,6 +1067,23 @@ function buildZip(entries) {
     return new Blob([...fileParts, ...centralParts, eocd], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
+if (typeof window !== 'undefined') {
+    window.__dataExplorer = {
+        importFile: handleFile,
+        getState() {
+            return {
+                headers: [...headers],
+                rows: dataset.map((row) => [...row]),
+                filteredIndexes: [...filteredIndexes],
+                activeFileName
+            };
+        }
+    };
+}
+
+
+ main
 const CRC32_TABLE = (() => {
     const table = new Uint32Array(256);
     for (let i = 0; i < 256; i += 1) {
@@ -965,5 +1108,8 @@ function computeCrc32(bytes) {
 function delayFrame() {
     return new Promise((resolve) => setTimeout(resolve));
 }
+ codex/develop-web-app-for-large-file-import-and-search-7zejw4
 
+
+ main
  main
